@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>ثبت پوزیشن</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;700&display=swap">
+<style>
+:root{
+  --bg:var(--tg-theme-bg-color,#ffffff);--bg2:var(--tg-theme-secondary-bg-color,#f1f3f5);--ink:var(--tg-theme-text-color,#15191c);
+  --hint:var(--tg-theme-hint-color,#7a858c);--acc:var(--tg-theme-button-color,#2a83c9);--acc-ink:var(--tg-theme-button-text-color,#ffffff);
+  --long:#2c8a55;--short:#c2414b;--warn:#a86b00;--line:rgba(127,127,127,.22)
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:Vazirmatn,system-ui,Tahoma,sans-serif;font-size:15px;line-height:1.6}
+.wrap{padding:14px 16px 96px;max-width:560px;margin:0 auto}
+h1{font-size:18px;margin:0 0 12px}
+.seg{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;background:var(--bg2);padding:4px;border-radius:12px;margin-bottom:16px}
+.seg button{all:unset;text-align:center;padding:9px 0;border-radius:9px;font-weight:700;font-size:14px;cursor:pointer;color:var(--hint)}
+.seg button.on{background:var(--bg);color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.12)}
+.lab{font-size:12.5px;color:var(--hint);margin:14px 0 6px;font-weight:500}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{all:unset;cursor:pointer;padding:7px 13px;border-radius:99px;background:var(--bg2);font-size:14px;font-weight:500;border:1.5px solid transparent;position:relative}
+.chip.on{background:var(--acc);color:var(--acc-ink)}
+.chip.long.on{background:var(--long);color:#fff}.chip.short.on{background:var(--short);color:#fff}
+.chip .dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--long);margin-inline-start:6px;vertical-align:middle}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.three{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.f label{display:block;font-size:12.5px;color:var(--hint);margin:12px 0 4px}
+.f input{width:100%;font:inherit;font-size:17px;font-weight:700;padding:10px 12px;border-radius:10px;border:1.5px solid var(--line);background:var(--bg);color:var(--ink);direction:ltr;text-align:left;font-variant-numeric:tabular-nums}
+.f input:focus{outline:none;border-color:var(--acc)}
+.f input.bad{border-color:var(--short)}
+.f input::placeholder{color:var(--hint);font-weight:400;opacity:.8}
+.note{background:var(--bg2);border-radius:10px;padding:10px 12px;margin-top:14px;font-size:13.5px}
+.note b{font-variant-numeric:tabular-nums}
+.note.setup{border-inline-start:4px solid var(--long)}
+.sum{display:grid;grid-template-columns:1fr 1fr;gap:6px 14px;margin-top:16px;padding:12px;border-radius:12px;background:var(--bg2);font-size:13px}
+.sum div span{display:block;color:var(--hint);font-size:11.5px}.sum div b{font-size:16px;direction:ltr;display:inline-block}
+.warn{color:var(--warn);font-size:13px;margin-top:8px}.err{color:var(--short);font-size:13px;margin-top:8px;font-weight:500}
+.pos{display:flex;flex-direction:column;gap:6px}
+.pos button{all:unset;cursor:pointer;display:flex;justify-content:space-between;align-items:center;padding:11px 13px;border-radius:10px;background:var(--bg2);border:1.5px solid transparent}
+.pos button.on{border-color:var(--acc)}
+.pos .s{font-weight:700}.pos .m{font-size:12.5px;color:var(--hint);direction:ltr}
+.tog{display:flex;align-items:center;gap:8px;margin-top:14px;font-size:14px;cursor:pointer;user-select:none}
+.tog input{width:18px;height:18px}
+.empty{color:var(--hint);font-size:13.5px}
+#fallback{display:none;margin-top:18px;width:100%;padding:13px;border:0;border-radius:12px;background:var(--acc);color:var(--acc-ink);font:inherit;font-weight:700;font-size:16px}
+#dbg{white-space:pre-wrap;direction:ltr;font-size:11px;color:var(--hint);margin-top:10px}
+.hidden{display:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>ثبت پوزیشن</h1>
+  <div class="seg" id="seg">
+    <button data-t="F" class="on">فیوچرز</button>
+    <button data-t="S">خرید اسپات</button>
+    <button data-t="C">بستن</button>
+  </div>
+
+  <!-- ============ futures -->
+  <section id="pF">
+    <div class="lab">صرافی</div>
+    <div class="chips" id="fx"></div>
+    <div class="lab">ارز <span id="fyHint"></span></div>
+    <div class="chips" id="fy"></div>
+    <div class="f hidden" id="fyOtherBox"><label>نماد ارز (مثلاً ADA)</label><input id="fyOther" autocomplete="off" autocapitalize="characters"></div>
+    <div id="fSetup"></div>
+    <div class="lab">جهت</div>
+    <div class="chips" id="fd"></div>
+    <div class="f">
+      <div class="two">
+        <div><label>قیمت ورود (پر شدن)</label><input id="fe" inputmode="decimal" autocomplete="off"></div>
+        <div><label>حد ضرر</label><input id="fs" inputmode="decimal" autocomplete="off"></div>
+      </div>
+      <div class="two">
+        <div><label>مارجین (دلار)</label><input id="fm" inputmode="decimal" autocomplete="off"></div>
+        <div><label>اهرم</label><input id="fl" inputmode="decimal" autocomplete="off"></div>
+      </div>
+      <label>تارگت‌ها (اختیاری — خالی = ۱R، ۲R، ۳R)</label>
+      <div class="three"><input id="ft1" inputmode="decimal" placeholder="TP1"><input id="ft2" inputmode="decimal" placeholder="TP2"><input id="ft3" inputmode="decimal" placeholder="TP3"></div>
+    </div>
+    <div class="lab">روش</div>
+    <div class="chips" id="fr"></div>
+    <label class="tog"><input type="checkbox" id="fpp"> کاغذی (پول واقعی نیست)</label>
+    <div class="sum" id="fSum"></div>
+    <div id="fMsg"></div>
+  </section>
+
+  <!-- ============ spot -->
+  <section id="pS" class="hidden">
+    <div class="lab">صرافی: توبیت (اسپات فقط توبیت)</div>
+    <div class="lab">ارز</div>
+    <div class="chips" id="sy"></div>
+    <div class="f hidden" id="syOtherBox"><label>نماد ارز (مثلاً ADA)</label><input id="syOther" autocomplete="off" autocapitalize="characters"></div>
+    <div id="sPlan"></div>
+    <div class="f two">
+      <div><label>قیمت خرید (پر شدن)</label><input id="se" inputmode="decimal" autocomplete="off"></div>
+      <div><label>مبلغ (دلار)</label><input id="su" inputmode="decimal" autocomplete="off"></div>
+    </div>
+    <label class="tog"><input type="checkbox" id="spp"> کاغذی (پول واقعی نیست)</label>
+    <div class="note">اگر از این ارز بگ باز دارید، این خرید به همان بگ اضافه و میانگین می‌شود.</div>
+    <div id="sMsg"></div>
+  </section>
+
+  <!-- ============ close -->
+  <section id="pC" class="hidden">
+    <div class="lab">کدام پوزیشن؟</div>
+    <div class="pos" id="cp"></div>
+    <div class="f"><label>قیمت بستن</label><input id="ce" inputmode="decimal" autocomplete="off"></div>
+    <div class="note">فقط برای بستن کامل. بستن نصف در TP2 و پله‌های فروش اسپات خودکار حساب می‌شوند.</div>
+    <div id="cMsg"></div>
+  </section>
+
+  <button id="fallback">ثبت</button>
+  <div id="dbg"></div>
+</div>
+<script>
+(function(){
+  var tg = window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData !== undefined ? window.Telegram.WebApp : null;
+  var inTg = !!(tg && tg.platform && tg.platform !== 'unknown');
+  if (tg) { try { tg.ready(); tg.expand(); } catch(e){} }
+
+  // ---- state handed over by the bot in the link (#...): valid setups, spot plans, open positions, defaults
+  var S = { d:{ m:10, l:10, e:'bitunix' }, s:[], a:[], o:[] };
+  try { var h = location.hash.slice(1); if (h) { h = h.replace(/-/g,'+').replace(/_/g,'/'); while (h.length % 4) h += '='; var j = JSON.parse(decodeURIComponent(escape(atob(h)))); for (var k in j) S[k] = j[k]; } } catch(e) {}
+
+  var FA = { BTC:'بیت‌کوین', ETH:'اتریوم', SOL:'سولانا', BNB:'بی‌ان‌بی', XRP:'ریپل', DOGE:'دوج', TRB:'ترلور', WLD:'ورلدکوین', AVAX:'آواکس', ADA:'کاردانو', LINK:'چین‌لینک', TON:'تون', SUI:'سویی' };
+  var BASE = ['BTC','ETH','SOL','BNB','XRP','DOGE','TRB','WLD'];
+  function $(id){ return document.getElementById(id); }
+  function num(v){ if (v == null) return NaN; v = String(v).trim().replace(/[۰-۹]/g, function(c){ return '۰۱۲۳۴۵۶۷۸۹'.indexOf(c); }).replace(/[٠-٩]/g, function(c){ return '٠١٢٣٤٥٦٧٨٩'.indexOf(c); }).replace(/٫/g,'.').replace(/[,٬\s]/g,''); return v === '' ? NaN : Number(v); }
+  function fmt(v, dp){ if (!isFinite(v)) return '—'; return Number(v).toLocaleString('en-US', { minimumFractionDigits: dp, maximumFractionDigits: dp }); }
+  function dpOf(v){ v = Number(v); return v >= 1000 ? 1 : v >= 100 ? 2 : v >= 10 ? 3 : v >= 1 ? 4 : v >= 0.01 ? 5 : 8; }
+  function chips(el, items, cur, onPick){
+    el.innerHTML = '';
+    items.forEach(function(it){
+      var b = document.createElement('button'); b.className = 'chip' + (it.cls ? ' ' + it.cls : '') + (it.v === cur ? ' on' : '');
+      b.innerHTML = it.t + (it.dot ? '<span class="dot"></span>' : ''); b.onclick = function(){ onPick(it.v); }; el.appendChild(b);
+    });
+  }
+  function setupOf(sym){ for (var i=0;i<S.s.length;i++) if (S.s[i].y === sym) return S.s[i]; return null; }
+  function planOf(sym){ for (var i=0;i<S.a.length;i++) if (S.a[i].y === sym) return S.a[i]; return null; }
+
+  var st = { tab:'F', x:S.d.e || 'bitunix', fy:'', fd:'', fr:'', sy:'', ci:'' };
+
+  // ---------------------------------------------------------------- futures
+  function coinList(kind){
+    var list = [], seen = {};
+    (kind === 'F' ? S.s : S.a).forEach(function(o){ if (!seen[o.y]) { seen[o.y] = 1; list.push({ v:o.y, t:(FA[o.y] || o.y), dot:true }); } });
+    BASE.forEach(function(c){ if (!seen[c]) { seen[c] = 1; list.push({ v:c, t:(FA[c] || c) }); } });
+    list.push({ v:'*', t:'ارز دیگر…' });
+    return list;
+  }
+  function fillSetup(su){
+    st.fd = su.d; $('fe').value = su.e; $('fs').value = su.st;
+    $('ft1').value = su.t[0]; $('ft2').value = su.t[1]; $('ft3').value = su.t[2]; st.fr = 'سیستم';
+    if (su.x) st.x = su.x;
+  }
+  function renderF(){
+    chips($('fx'), [{ v:'bitunix', t:'بیت‌یونیکس' }, { v:'toobit', t:'توبیت' }], st.x, function(v){ st.x = v; renderF(); });
+    chips($('fy'), coinList('F'), st.fy, function(v){
+      st.fy = v; $('fyOtherBox').classList.toggle('hidden', v !== '*');
+      var su = setupOf(v); if (su) fillSetup(su); renderF();
+    });
+    $('fyHint').textContent = S.s.length ? '(نقطهٔ سبز = ست‌آپ معتبر سیستم)' : '';
+    var su = setupOf(st.fy);
+    $('fSetup').innerHTML = su ? '<div class="note setup">ست‌آپ سیستم برای <b>' + (FA[su.y] || su.y) + '</b>: ورود <b>' + fmt(su.e, su.p) + '</b> · حد ضرر <b>' + fmt(su.st, su.p) + '</b><br>اعداد پر شد؛ اگر سفارش با قیمت دیگری پر شد، فقط «قیمت ورود» را عوض کنید.</div>' : '';
+    chips($('fd'), [{ v:'L', t:'لانگ', cls:'long' }, { v:'S', t:'شورت', cls:'short' }], st.fd, function(v){ st.fd = v; renderF(); });
+    chips($('fr'), [{ v:'سیستم', t:'سیستم' }, { v:'TV', t:'تحلیل TV' }, { v:'ADR', t:'روش ADR' }, { v:'دستی', t:'دستی' }], st.fr, function(v){ st.fr = v; renderF(); });
+    update();
+  }
+  function futuresData(){
+    var y = st.fy === '*' ? $('fyOther').value.trim().toUpperCase().replace(/USDT$/,'') : st.fy;
+    var e = num($('fe').value), s = num($('fs').value), m = num($('fm').value), l = num($('fl').value);
+    var t = [num($('ft1').value), num($('ft2').value), num($('ft3').value)].filter(function(v){ return isFinite(v); });
+    return { y:y, e:e, s:s, m:m, l:l, t:t };
+  }
+  function checkF(){
+    var f = futuresData(), errs = [], warns = [];
+    var sg = st.fd === 'S' ? -1 : 1;
+    if (!f.y || !/^[A-Z0-9]{2,12}$/.test(f.y)) errs.push('ارز را انتخاب کنید');
+    if (!st.fd) errs.push('لانگ یا شورت را انتخاب کنید');
+    if (!(f.e > 0)) errs.push('قیمت ورود را بنویسید');
+    if (!(f.s > 0)) errs.push('حد ضرر را بنویسید');
+    if (f.e > 0 && f.s > 0 && st.fd && sg * (f.e - f.s) <= 0) errs.push('حد ضرر باید ' + (sg > 0 ? 'زیر' : 'بالای') + ' ورود باشد');
+    if (!(f.m > 0)) errs.push('مارجین را بنویسید');
+    if (!(f.l >= 1)) errs.push('اهرم را بنویسید');
+    f.t.forEach(function(v, i){ if (f.e > 0 && st.fd && sg * (v - f.e) <= 0) errs.push('TP' + (i + 1) + ' سمت اشتباه ورود است'); });
+    if (f.t.length === 1) errs.push('یا هیچ تارگتی ننویسید یا حداقل دو تا');
+    if (!st.fr) errs.push('روش را انتخاب کنید');
+    var dp = f.e > 0 ? Math.max(dpOf(f.e), ((String($('fe').value).split(/[.٫]/)[1] || '').length)) : 2;
+    var n = f.m * f.l, sp = (f.e > 0 && f.s > 0) ? Math.abs(f.e - f.s) / f.e * 100 : NaN, risk = n * sp / 100;
+    var R = Math.abs(f.e - f.s);
+    ['ft1','ft2','ft3'].forEach(function(id, i){ $(id).placeholder = (f.e > 0 && f.s > 0 && st.fd) ? fmt(f.e + sg * (i + 1) * R, dp) : 'TP' + (i + 1); });
+    $('fSum').innerHTML =
+      '<div><span>حجم</span><b>' + fmt(n, 2) + '$</b></div>' +
+      '<div><span>فاصلهٔ حد ضرر</span><b>' + fmt(sp, 2) + '%</b></div>' +
+      '<div><span>ضرر اگر حد ضرر بخورد</span><b style="color:var(--short)">' + fmt(risk, 2) + '$</b></div>' +
+      '<div><span>لیکویید حدود</span><b>' + (f.l >= 1 ? fmt(100 / f.l, 1) + '%' : '—') + '</b></div>';
+    if (risk > 1.5 * 1.05) warns.push('ریسک ' + fmt(risk, 2) + '$ از سقف ۱٫۵$ بیشتر است');
+    if (isFinite(sp) && f.l >= 1 && sp >= 100 / f.l * 0.9) warns.push('با این اهرم قبل از رسیدن به حد ضرر لیکویید می‌شوید');
+    return { ok: !errs.length, errs: errs, warns: warns, data: { k:'F', x:st.x, y:f.y, d:st.fd, e:f.e, s:f.s, m:f.m, l:f.l, t:f.t, r:st.fr, pp:$('fpp').checked } };
+  }
+
+  // ---------------------------------------------------------------- spot
+  function renderS(){
+    chips($('sy'), coinList('S'), st.sy, function(v){
+      st.sy = v; $('syOtherBox').classList.toggle('hidden', v !== '*');
+      var pl = planOf(v); if (pl && pl.t && pl.t.length) { $('se').value = pl.t[0][0]; $('su').value = pl.t[0][1]; }
+      renderS();
+    });
+    var pl = planOf(st.sy), box = $('sPlan'); box.innerHTML = '';
+    if (pl) {
+      var d = document.createElement('div'); d.className = 'note setup'; d.innerHTML = 'پلهٔ پر شده را بزنید:'; box.appendChild(d);
+      var c = document.createElement('div'); c.className = 'chips'; c.style.marginTop = '8px';
+      pl.t.forEach(function(tr, i){ var b = document.createElement('button'); b.className = 'chip'; b.textContent = 'پلهٔ ' + (i + 1) + ': ' + fmt(tr[0], pl.p) + ' · ' + tr[1] + '$'; b.onclick = function(){ $('se').value = tr[0]; $('su').value = tr[1]; update(); }; c.appendChild(b); });
+      d.appendChild(c);
+    }
+    update();
+  }
+  function checkS(){
+    var y = st.sy === '*' ? $('syOther').value.trim().toUpperCase().replace(/USDT$/,'') : st.sy;
+    var e = num($('se').value), u = num($('su').value), errs = [];
+    if (!y || !/^[A-Z0-9]{2,12}$/.test(y)) errs.push('ارز را انتخاب کنید');
+    if (!(e > 0)) errs.push('قیمت خرید را بنویسید');
+    if (!(u > 0)) errs.push('مبلغ را بنویسید');
+    return { ok: !errs.length, errs: errs, warns: [], data: { k:'S', y:y, e:e, u:u, pp:$('spp').checked } };
+  }
+
+  // ---------------------------------------------------------------- close
+  function renderC(){
+    var el = $('cp'); el.innerHTML = '';
+    if (!S.o.length) { el.innerHTML = '<div class="empty">پوزیشن بازی ثبت نشده. (اگر همین الان ثبت کرده‌اید، بعد از تأیید ربات این فهرست به‌روز می‌شود.)</div>'; }
+    S.o.forEach(function(p){
+      var b = document.createElement('button'); b.className = p.i === st.ci ? 'on' : '';
+      var side = p.g === 'S' ? 'اسپات' : (p.d === 'S' ? 'شورت' : 'لانگ');
+      b.innerHTML = '<span class="s">' + (FA[p.y] || p.y) + ' · ' + side + '</span><span class="m">' + fmt(p.e, p.p) + '</span>';
+      b.onclick = function(){ st.ci = p.i; renderC(); }; el.appendChild(b);
+    });
+    update();
+  }
+  function checkC(){
+    var p = null; S.o.forEach(function(x){ if (x.i === st.ci) p = x; });
+    var e = num($('ce').value), errs = [];
+    if (!p) errs.push('پوزیشن را انتخاب کنید');
+    if (!(e > 0)) errs.push('قیمت بستن را بنویسید');
+    return { ok: !errs.length, errs: errs, warns: [], data: p ? { k:'C', i:p.i, y:p.y, e:e } : null };
+  }
+
+  // ---------------------------------------------------------------- shared
+  function current(){ return st.tab === 'F' ? checkF() : st.tab === 'S' ? checkS() : checkC(); }
+  function update(){
+    var c = current(), box = $({ F:'fMsg', S:'sMsg', C:'cMsg' }[st.tab]);
+    box.innerHTML = c.warns.map(function(w){ return '<div class="warn">⚠️ ' + w + '</div>'; }).join('') + (c.ok ? '' : '<div class="err">' + c.errs[0] + '</div>');
+    var label = st.tab === 'C' ? 'بستن پوزیشن' : 'ثبت پوزیشن';
+    if (inTg) {
+      tg.MainButton.setText(label);
+      if (c.ok) { tg.MainButton.enable(); tg.MainButton.show(); } else { tg.MainButton.disable(); tg.MainButton.show(); }
+    } else { $('fallback').style.display = 'block'; $('fallback').textContent = label; $('fallback').disabled = !c.ok; $('fallback').style.opacity = c.ok ? 1 : .5; }
+  }
+  function submit(){
+    var c = current(); if (!c.ok) return;
+    var s = JSON.stringify(c.data);
+    if (inTg) { tg.sendData(s); } else { $('dbg').textContent = s; }
+  }
+  if (inTg) tg.MainButton.onClick(submit); else $('fallback').onclick = submit;
+
+  document.querySelectorAll('#seg button').forEach(function(b){
+    b.onclick = function(){
+      st.tab = b.getAttribute('data-t');
+      document.querySelectorAll('#seg button').forEach(function(x){ x.classList.toggle('on', x === b); });
+      ['F','S','C'].forEach(function(t){ $('p' + t).classList.toggle('hidden', t !== st.tab); });
+      if (st.tab === 'F') renderF(); else if (st.tab === 'S') renderS(); else renderC();
+    };
+  });
+  document.querySelectorAll('input').forEach(function(i){ i.addEventListener('input', update); i.addEventListener('change', update); });
+  $('fm').value = S.d.m; $('fl').value = S.d.l;
+  var q = new URLSearchParams(location.search);
+  if (q.get('t') === 'C') document.querySelector('#seg button[data-t="C"]').click(); else renderF();
+})();
+</script>
+</body>
+</html>
