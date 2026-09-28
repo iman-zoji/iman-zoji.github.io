@@ -4,8 +4,6 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 <title>ثبت پوزیشن</title>
-<script src="https://telegram.org/js/telegram-web-app.js"></script>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;700&display=swap">
 <style>
 :root{
   --bg:var(--tg-theme-bg-color,#ffffff);--bg2:var(--tg-theme-secondary-bg-color,#f1f3f5);--ink:var(--tg-theme-text-color,#15191c);
@@ -13,7 +11,7 @@
   --long:#2c8a55;--short:#c2414b;--warn:#a86b00;--line:rgba(127,127,127,.22)
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-body{margin:0;background:var(--bg);color:var(--ink);font-family:Vazirmatn,system-ui,Tahoma,sans-serif;font-size:15px;line-height:1.6}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:Vazirmatn,"Segoe UI",Tahoma,system-ui,sans-serif;font-size:15px;line-height:1.6}
 .wrap{padding:14px 16px 96px;max-width:560px;margin:0 auto}
 h1{font-size:18px;margin:0 0 12px}
 .seg{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;background:var(--bg2);padding:4px;border-radius:12px;margin-bottom:16px}
@@ -45,7 +43,7 @@ h1{font-size:18px;margin:0 0 12px}
 .tog{display:flex;align-items:center;gap:8px;margin-top:14px;font-size:14px;cursor:pointer;user-select:none}
 .tog input{width:18px;height:18px}
 .empty{color:var(--hint);font-size:13.5px}
-#fallback{display:none;margin-top:18px;width:100%;padding:13px;border:0;border-radius:12px;background:var(--acc);color:var(--acc-ink);font:inherit;font-weight:700;font-size:16px}
+#fallback{display:block;position:fixed;left:16px;right:16px;bottom:calc(12px + env(safe-area-inset-bottom,0px));z-index:5;box-shadow:0 4px 14px rgba(0,0,0,.18);padding:14px;border:0;border-radius:12px;background:var(--acc);color:var(--acc-ink);font:inherit;font-weight:700;font-size:16px}
 #dbg{white-space:pre-wrap;direction:ltr;font-size:11px;color:var(--hint);margin-top:10px}
 .hidden{display:none}
 </style>
@@ -118,13 +116,25 @@ h1{font-size:18px;margin:0 0 12px}
 </div>
 <script>
 (function(){
-  var tg = window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData !== undefined ? window.Telegram.WebApp : null;
-  var inTg = !!(tg && tg.platform && tg.platform !== 'unknown');
-  if (tg) { try { tg.ready(); tg.expand(); } catch(e){} }
+  // ---- talking to Telegram without telegram.org's script (it can be filtered): the same events it would send
+  function postEvent(type, data) {
+    var d = data ? JSON.stringify(data) : '';
+    try {
+      if (window.TelegramWebviewProxy && window.TelegramWebviewProxy.postEvent) { window.TelegramWebviewProxy.postEvent(type, d); return true; }
+      if (window.external && 'notify' in window.external) { window.external.notify(JSON.stringify({ eventType:type, eventData:data })); return true; }
+      if (window.parent !== window) { window.parent.postMessage(JSON.stringify({ eventType:type, eventData:data }), '*'); return true; }
+    } catch(e) {}
+    return false;
+  }
+  // Telegram appends its own parameters (theme, platform) to the # part of the link
+  var tgp = {}; location.hash.slice(1).split('&').forEach(function(kv){ var i = kv.indexOf('='); if (i > 0) { try { tgp[kv.slice(0, i)] = decodeURIComponent(kv.slice(i + 1)); } catch(e){} } });
+  var inTg = !!(window.TelegramWebviewProxy || (window.external && 'notify' in window.external) || window.parent !== window || tgp.tgWebAppPlatform);
+  try { var th = JSON.parse(tgp.tgWebAppThemeParams || '{}'); for (var tk in th) document.documentElement.style.setProperty('--tg-theme-' + tk.replace(/_/g, '-'), th[tk]); } catch(e) {}
+  postEvent('web_app_ready'); postEvent('web_app_expand');
 
-  // ---- state handed over by the bot in the link (#...): valid setups, spot plans, open positions, defaults
+  // ---- state handed over by the bot in the link (?s=...): valid setups, spot plans, open positions, defaults
   var S = { d:{ m:10, l:10, e:'bitunix' }, s:[], a:[], o:[] };
-  try { var h = location.hash.slice(1); if (h) { h = h.replace(/-/g,'+').replace(/_/g,'/'); while (h.length % 4) h += '='; var j = JSON.parse(decodeURIComponent(escape(atob(h)))); for (var k in j) S[k] = j[k]; } } catch(e) {}
+  try { var h = new URLSearchParams(location.search).get('s') || ''; if (h) { h = h.replace(/-/g,'+').replace(/_/g,'/'); while (h.length % 4) h += '='; var j = JSON.parse(decodeURIComponent(escape(atob(h)))); for (var k in j) S[k] = j[k]; } } catch(e) {}
 
   var FA = { BTC:'بیت‌کوین', ETH:'اتریوم', SOL:'سولانا', BNB:'بی‌ان‌بی', XRP:'ریپل', DOGE:'دوج', TRB:'ترلور', WLD:'ورلدکوین', AVAX:'آواکس', ADA:'کاردانو', LINK:'چین‌لینک', TON:'تون', SUI:'سویی' };
   var BASE = ['BTC','ETH','SOL','BNB','XRP','DOGE','TRB','WLD'];
@@ -254,17 +264,15 @@ h1{font-size:18px;margin:0 0 12px}
     var c = current(), box = $({ F:'fMsg', S:'sMsg', C:'cMsg' }[st.tab]);
     box.innerHTML = c.warns.map(function(w){ return '<div class="warn">⚠️ ' + w + '</div>'; }).join('') + (c.ok ? '' : '<div class="err">' + c.errs[0] + '</div>');
     var label = st.tab === 'C' ? 'بستن پوزیشن' : 'ثبت پوزیشن';
-    if (inTg) {
-      tg.MainButton.setText(label);
-      if (c.ok) { tg.MainButton.enable(); tg.MainButton.show(); } else { tg.MainButton.disable(); tg.MainButton.show(); }
-    } else { $('fallback').style.display = 'block'; $('fallback').textContent = label; $('fallback').disabled = !c.ok; $('fallback').style.opacity = c.ok ? 1 : .5; }
+    $('fallback').textContent = c.ok ? label : (label + ' — ' + c.errs[0]); $('fallback').disabled = !c.ok; $('fallback').style.opacity = c.ok ? 1 : .55;
   }
   function submit(){
     var c = current(); if (!c.ok) return;
     var s = JSON.stringify(c.data);
-    if (inTg) { tg.sendData(s); } else { $('dbg').textContent = s; }
+    if (inTg && postEvent('web_app_data_send', { data: s })) { $('fallback').textContent = 'ارسال شد ✓'; $('fallback').disabled = true; }
+    else { $('dbg').textContent = 'این فرم فقط از دکمهٔ «📝 ثبت یا بستن پوزیشن» داخل ربات کار می‌کند.\n' + s; }
   }
-  if (inTg) tg.MainButton.onClick(submit); else $('fallback').onclick = submit;
+  $('fallback').onclick = submit;
 
   document.querySelectorAll('#seg button').forEach(function(b){
     b.onclick = function(){
